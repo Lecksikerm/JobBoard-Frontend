@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Briefcase, Menu, X, Bell, User, LogOut, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { notificationsApi } from '../lib/api'; // ADD THIS IMPORT
 import { subscribeToNotifications, getSocket } from '../lib/socket';
 
 const Navbar = () => {
@@ -20,33 +21,55 @@ const Navbar = () => {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    // Socket.IO Notifications
+    // FETCH EXISTING NOTIFICATIONS ON MOUNT - ADD THIS
     useEffect(() => {
-        if (!isAuthenticated || !user) return;
+        if (isAuthenticated && user?.role === 'employer') {
+            fetchNotifications();
+        }
+    }, [isAuthenticated, user]);
 
-        // Subscribe to real-time notifications
+    const fetchNotifications = async () => {
+        try {
+            console.log('Fetching notifications...');
+            const response = await notificationsApi.getMyNotifications();
+            console.log('Notifications fetched:', response.data);
+
+            const notifs = response.data?.notifications || [];
+            setNotifications(notifs);
+            setUnreadCount(notifs.filter(n => !n.isRead).length);
+        } catch (err) {
+            console.error('Error fetching notifications:', err);
+        }
+    };
+
+    // Socket.IO for real-time notifications
+    useEffect(() => {
+        if (!isAuthenticated || !user || user?.role !== 'employer') return;
+
+        console.log('Setting up socket for employer:', user.id);
+
         subscribeToNotifications((data) => {
             console.log('New notification received:', data);
 
             // Add to notifications list
-            setNotifications(prev => [data, ...prev]);
+            const newNotif = data.notification || data;
+            setNotifications(prev => [newNotif, ...prev]);
             setUnreadCount(prev => prev + 1);
 
-            // Optional: Show browser notification if permitted
+            // Show browser notification
             if (Notification.permission === 'granted') {
                 new Notification('New Job Application', {
-                    body: data.message,
-                    icon: '/vite.svg' // or your logo
+                    body: data.message || newNotif.message,
+                    icon: '/vite.svg'
                 });
             }
         });
 
-        // Request browser notification permission (optional)
+        // Request browser notification permission
         if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
         }
 
-        // Cleanup on unmount
         return () => {
             const socket = getSocket();
             if (socket) {
@@ -55,8 +78,20 @@ const Navbar = () => {
         };
     }, [isAuthenticated, user]);
 
-    const markAsRead = () => {
-        setUnreadCount(0);
+    const markAsRead = async () => {
+        try {
+            // Mark all unread as read
+            const unreadNotifs = notifications.filter(n => !n.isRead);
+            for (const notif of unreadNotifs) {
+                await notificationsApi.markAsRead(notif._id);
+            }
+
+            // Update local state
+            setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+            setUnreadCount(0);
+        } catch (err) {
+            console.error('Error marking as read:', err);
+        }
         setShowNotifications(false);
     };
 
@@ -237,7 +272,7 @@ const Navbar = () => {
                                 </>
                             ) : (
                                 <>
-                                    <Link to="/login" className="block px-3 py-2 rounded-md text-base font-medium text-primary-600 font-semibold">
+                                   <Link to="/login" className="block px-3 py-2 rounded-md text-base font-semibold text-primary-600">
                                         Log in
                                     </Link>
                                 </>

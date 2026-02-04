@@ -4,7 +4,7 @@ import { X, Upload, FileText, Loader2, CheckCircle } from 'lucide-react';
 import { applicationsApi, resumeApi } from '../lib/api';
 
 const ApplyJobModal = ({ job, onClose }) => {
-    const [step, setStep] = useState('select-resume'); // 'select-resume', 'upload-new', 'cover-letter', 'success'
+    const [step, setStep] = useState('select-resume');
     const [resumes, setResumes] = useState([]);
     const [selectedResumeId, setSelectedResumeId] = useState(null);
     const [file, setFile] = useState(null);
@@ -19,21 +19,36 @@ const ApplyJobModal = ({ job, onClose }) => {
 
     const fetchResumes = async () => {
         try {
+            console.log('Fetching resumes...');
             const response = await resumeApi.getMyResumes();
-            setResumes(response.data || []);
-            if (response.data?.length > 0) {
-                setSelectedResumeId(response.data[0]._id);
+            console.log('Resumes fetched:', response.data);
+
+            const resumesList = response.data || [];
+            setResumes(resumesList);
+
+            if (resumesList.length > 0) {
+                setSelectedResumeId(resumesList[0]._id);
             }
         } catch (err) {
-            console.log('No resumes found or endpoint not ready');
+            console.error('Error fetching resumes:', err.response?.data || err.message);
+            setResumes([]);
         }
     };
 
     const handleFileChange = (e) => {
         const selectedFile = e.target.files[0];
-        if (selectedFile && (selectedFile.type === 'application/pdf' ||
-            selectedFile.type === 'application/msword' ||
-            selectedFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
+        const validTypes = [
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ];
+
+        if (selectedFile && validTypes.includes(selectedFile.type)) {
+            // Check file size (5MB)
+            if (selectedFile.size > 5 * 1024 * 1024) {
+                setError('File size must be less than 5MB');
+                return;
+            }
             setFile(selectedFile);
             setError('');
         } else {
@@ -48,12 +63,38 @@ const ApplyJobModal = ({ job, onClose }) => {
         }
 
         setUploading(true);
+        setError('');
+
         try {
+            console.log('Uploading file:', file.name, 'Type:', file.type);
+
             const response = await resumeApi.upload(file);
-            setSelectedResumeId(response.data._id);
+            console.log('Upload response:', response.data);
+
+            const newResume = response.data.resume;
+
+            if (!newResume || !newResume._id) {
+                throw new Error('Invalid response from server');
+            }
+
+            // Add to list and select it
+            setResumes(prev => [newResume, ...prev]);
+            setSelectedResumeId(newResume._id);
             setStep('cover-letter');
+
         } catch (err) {
-            setError(err.response?.data?.message || 'Failed to upload resume');
+            console.error('Upload error:', err);
+
+            let errorMessage = 'Failed to upload resume';
+            if (err.response) {
+                errorMessage = err.response.data?.message || `Server error: ${err.response.status}`;
+            } else if (err.request) {
+                errorMessage = 'No response from server. Check your connection.';
+            } else {
+                errorMessage = err.message;
+            }
+
+            setError(errorMessage);
         } finally {
             setUploading(false);
         }
@@ -66,14 +107,23 @@ const ApplyJobModal = ({ job, onClose }) => {
         }
 
         setLoading(true);
+        setError('');
+
         try {
+            console.log('Submitting application:', {
+                jobId: job._id,
+                resumeId: selectedResumeId
+            });
+
             await applicationsApi.apply({
                 jobId: job._id,
                 resumeId: selectedResumeId,
                 coverLetter
             });
+
             setStep('success');
         } catch (err) {
+            console.error('Application error:', err);
             setError(err.response?.data?.message || 'Failed to submit application');
         } finally {
             setLoading(false);
@@ -92,7 +142,9 @@ const ApplyJobModal = ({ job, onClose }) => {
                                 {resumes.map((resume) => (
                                     <label
                                         key={resume._id}
-                                        className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${selectedResumeId === resume._id ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:border-gray-300'
+                                        className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${selectedResumeId === resume._id
+                                                ? 'border-primary-500 bg-primary-50'
+                                                : 'border-gray-200 hover:border-gray-300'
                                             }`}
                                     >
                                         <input
@@ -105,27 +157,33 @@ const ApplyJobModal = ({ job, onClose }) => {
                                         />
                                         <FileText className="h-5 w-5 text-gray-400 mr-3" />
                                         <div className="flex-1">
-                                            <p className="font-medium text-gray-900">{resume.originalName || 'Resume'}</p>
-                                            <p className="text-sm text-gray-500">{new Date(resume.createdAt).toLocaleDateString()}</p>
+                                            <p className="font-medium text-gray-900">
+                                                {resume.fileName || 'Resume'}
+                                            </p>
+                                            <p className="text-sm text-gray-500">
+                                                {new Date(resume.createdAt).toLocaleDateString()}
+                                            </p>
                                         </div>
                                     </label>
                                 ))}
                             </div>
                         ) : (
-                            <p className="text-gray-500 text-center py-4">No resumes found. Upload a new one.</p>
+                            <p className="text-gray-500 text-center py-4">
+                                No resumes found. Upload a new one.
+                            </p>
                         )}
 
                         <div className="flex space-x-3 pt-4 border-t">
                             <button
                                 onClick={() => setStep('upload-new')}
-                                className="flex-1 btn-secondary"
+                                className="flex-1 py-2.5 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 Upload New
                             </button>
                             <button
                                 onClick={() => setStep('cover-letter')}
                                 disabled={!selectedResumeId}
-                                className="flex-1 btn-primary disabled:opacity-50"
+                                className="flex-1 py-2.5 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Continue
                             </button>
@@ -162,14 +220,14 @@ const ApplyJobModal = ({ job, onClose }) => {
                         <div className="flex space-x-3">
                             <button
                                 onClick={() => setStep('select-resume')}
-                                className="flex-1 btn-secondary"
+                                className="flex-1 py-2.5 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 Back
                             </button>
                             <button
                                 onClick={uploadResume}
                                 disabled={!file || uploading}
-                                className="flex-1 btn-primary flex items-center justify-center space-x-2"
+                                className="flex-1 py-2.5 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
                             >
                                 {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
                                 <span>Upload & Continue</span>
@@ -194,14 +252,14 @@ const ApplyJobModal = ({ job, onClose }) => {
                         <div className="flex space-x-3">
                             <button
                                 onClick={() => resumes.length > 0 ? setStep('select-resume') : setStep('upload-new')}
-                                className="flex-1 btn-secondary"
+                                className="flex-1 py-2.5 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 Back
                             </button>
                             <button
                                 onClick={submitApplication}
                                 disabled={loading}
-                                className="flex-1 btn-primary flex items-center justify-center space-x-2"
+                                className="flex-1 py-2.5 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
                             >
                                 {loading && <Loader2 className="h-4 w-4 animate-spin" />}
                                 <span>Submit Application</span>
@@ -220,7 +278,7 @@ const ApplyJobModal = ({ job, onClose }) => {
                         <p className="text-gray-600 mb-6">
                             Your application for <span className="font-semibold">{job.title}</span> has been sent to {job.employerId?.companyName}.
                         </p>
-                        <button onClick={onClose} className="btn-primary w-full">
+                        <button onClick={onClose} className="w-full py-2.5 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-colors">
                             Close
                         </button>
                     </div>

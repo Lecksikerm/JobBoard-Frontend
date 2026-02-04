@@ -1,24 +1,25 @@
 import axios from 'axios';
 
+// Fix: Remove space at end of URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://job-board-platform-3s4b.onrender.com/api';
 
 const api = axios.create({
     baseURL: API_BASE_URL,
-    headers: {
-        'Content-Type': 'application/json',
-    },
 });
 
-// Request interceptor
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem('token');
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
+
+    if (config.data instanceof FormData) {
+        delete config.headers['Content-Type'];
+    }
+
     return config;
 });
 
-// Response interceptor
 api.interceptors.response.use(
     (response) => response,
     (error) => {
@@ -48,31 +49,36 @@ export const jobsApi = {
     create: (data) => api.post('/jobs', data),
     update: (id, data) => api.put(`/jobs/${id}`, data),
     delete: (id) => api.delete(`/jobs/${id}`),
-    getMyJobs: () => api.get('/jobs/my-jobs'), // You may need to add this endpoint
+    getMyJobs: () => api.get('/jobs/my-jobs'),
 };
 
-// Resume API (for uploading CVs)
+// Resume API
 export const resumeApi = {
     upload: (file) => {
         const formData = new FormData();
         formData.append('resume', file);
-        return api.post('/resumes', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        return api.post('/resumes', formData);
     },
     getMyResumes: () => api.get('/resumes/my'),
+    deleteResume: (id) => api.delete(`/resumes/${id}`),
 };
 
-// Applications API
+// Applications API - For candidates
 export const applicationsApi = {
-    apply: (data) => api.post('/applications', data), // { jobId, resumeId, coverLetter? }
+    apply: (data) => api.post('/applications', data),
     getMyApplications: () => api.get('/applications/my'),
     updateStatus: (id, status) => api.put(`/applications/${id}/status`, { status }),
-    getJobApplications: (jobId) => api.get(`/jobs/${jobId}/applications`), // You may need this
+};
+
+// Employer API - For employers to view applications
+export const employerApi = {
+    getApplications: () => api.get('/employer/applications'),
+    getApplicationDetails: (id) => api.get(`/employer/applications/${id}`),
+    updateApplicationStatus: (id, status) => api.put(`/applications/${id}/status`, { status }),
 };
 
 // Notifications API
 export const notificationsApi = {
-    getMyNotifications: () => api.get('/notifications/my'),
-    markAsRead: (id) => api.put(`/notifications/${id}/read`),
+    getMyNotifications: () => api.get('/notifications'),
+    markAsRead: (id) => api.patch(`/notifications/${id}/read`),
 };
