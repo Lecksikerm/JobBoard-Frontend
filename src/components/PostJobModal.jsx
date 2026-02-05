@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Loader2, Plus, Minus } from 'lucide-react';
 import { jobsApi } from '../lib/api';
+import { useToast } from '../context/ToastContext';
 
 const PostJobModal = ({ job, onClose, onSuccess }) => {
     const [formData, setFormData] = useState({
@@ -14,6 +15,7 @@ const PostJobModal = ({ job, onClose, onSuccess }) => {
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const { success, error: showError } = useToast();
 
     useEffect(() => {
         if (job) {
@@ -59,18 +61,22 @@ const PostJobModal = ({ job, onClose, onSuccess }) => {
 
             if (job) {
                 await jobsApi.update(job._id, data);
+                success('Job updated successfully!');
             } else {
                 await jobsApi.create(data);
+                success('Job posted successfully!');
             }
 
             onSuccess();
-            onClose();
         } catch (err) {
-            setError(err.response?.data?.message || 'Failed to save job');
+            const errorMsg = err.response?.data?.message || 'Failed to save job';
+            showError(errorMsg);
+            setError(errorMsg);
         } finally {
             setLoading(false);
         }
     };
+
 
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">

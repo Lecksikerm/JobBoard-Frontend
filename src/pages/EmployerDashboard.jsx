@@ -4,6 +4,8 @@ import { Plus, Briefcase, Users, Eye, Edit2, Trash2, Loader2, ChevronDown, Chevr
 import { jobsApi, employerApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import PostJobModal from '../components/PostJobModal';
+import { useToast } from '../context/ToastContext';
+
 
 const EmployerDashboard = () => {
     const [jobs, setJobs] = useState([]);
@@ -12,7 +14,7 @@ const EmployerDashboard = () => {
     const [showPostModal, setShowPostModal] = useState(false);
     const [editingJob, setEditingJob] = useState(null);
     const [expandedJob, setExpandedJob] = useState(null);
-    const [selectedApplication, setSelectedApplication] = useState(null);
+    const { success, error: showError } = useToast();
     const { user } = useAuth();
 
     useEffect(() => {
@@ -52,18 +54,27 @@ const EmployerDashboard = () => {
         try {
             await jobsApi.delete(jobId);
             setJobs(jobs.filter(j => j._id !== jobId));
+            success('Job deleted successfully');
         } catch (error) {
-            alert('Failed to delete job');
+            showError('Failed to delete job');
         }
     };
 
     const updateApplicationStatus = async (appId, status) => {
         try {
             await employerApi.updateApplicationStatus(appId, status);
-            // Refresh data
             fetchData();
+
+            const statusMessages = {
+                reviewed: 'Application marked as reviewed',
+                shortlisted: 'Candidate shortlisted successfully',
+                accepted: 'Candidate accepted! 🎉',
+                rejected: 'Candidate rejected'
+            };
+
+            success(statusMessages[status] || 'Status updated');
         } catch (error) {
-            alert('Failed to update status');
+            showError('Failed to update status');
         }
     };
 
@@ -200,103 +211,106 @@ const EmployerDashboard = () => {
                                             </div>
                                         </div>
 
-                                        {/* Applications Section */}
-                                        <AnimatePresence>
+                                        {/* Applications Section - FIXED ANIMATION */}
+                                        <AnimatePresence initial={false}>
                                             {isExpanded && jobApps && jobApps.applications.length > 0 && (
                                                 <motion.div
-                                                    initial={{ height: 0, opacity: 0 }}
-                                                    animate={{ height: 'auto', opacity: 1 }}
-                                                    exit={{ height: 0, opacity: 0 }}
-                                                    className="bg-gray-50 border-t"
+                                                    initial={{ opacity: 0, height: 0 }}
+                                                    animate={{ opacity: 1, height: 'auto' }}
+                                                    exit={{ opacity: 0, height: 0 }}
+                                                    transition={{ duration: 0.3, ease: "easeInOut" }}
+                                                    style={{ overflow: 'hidden' }}
                                                 >
-                                                    <div className="p-6">
-                                                        <h4 className="font-semibold text-gray-900 mb-4">Applicants</h4>
-                                                        <div className="space-y-4">
-                                                            {jobApps.applications.map((app) => (
-                                                                <div key={app._id} className="bg-white rounded-lg p-4 border border-gray-200">
-                                                                    <div className="flex justify-between items-start">
-                                                                        <div className="flex items-start space-x-4">
-                                                                            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-                                                                                <User className="h-5 w-5 text-primary-600" />
-                                                                            </div>
-                                                                            <div>
-                                                                                <p className="font-semibold text-gray-900">
-                                                                                    {app.candidate?.fullName || 'Unknown Candidate'}
-                                                                                </p>
-                                                                                <p className="text-sm text-gray-500">{app.candidate?.email}</p>
-                                                                                <p className="text-sm text-gray-400 mt-1">
-                                                                                    Applied {new Date(app.appliedAt).toLocaleDateString()}
-                                                                                </p>
-                                                                                {app.coverLetter && (
-                                                                                    <p className="text-sm text-gray-600 mt-2 line-clamp-2">
-                                                                                        "{app.coverLetter}"
+                                                    <div className="bg-gray-50 border-t">
+                                                        <div className="p-6">
+                                                            <h4 className="font-semibold text-gray-900 mb-4">Applicants</h4>
+                                                            <div className="space-y-4">
+                                                                {jobApps.applications.map((app) => (
+                                                                    <div key={app._id} className="bg-white rounded-lg p-4 border border-gray-200">
+                                                                        <div className="flex justify-between items-start">
+                                                                            <div className="flex items-start space-x-4">
+                                                                                <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                                                                                    <User className="h-5 w-5 text-primary-600" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <p className="font-semibold text-gray-900">
+                                                                                        {app.candidate?.fullName || 'Unknown Candidate'}
                                                                                     </p>
-                                                                                )}
+                                                                                    <p className="text-sm text-gray-500">{app.candidate?.email}</p>
+                                                                                    <p className="text-sm text-gray-400 mt-1">
+                                                                                        Applied {new Date(app.appliedAt).toLocaleDateString()}
+                                                                                    </p>
+                                                                                    {app.coverLetter && (
+                                                                                        <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+                                                                                            "{app.coverLetter}"
+                                                                                        </p>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex flex-col items-end space-y-2">
+                                                                                <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${getStatusColor(app.status)}`}>
+                                                                                    {app.status}
+                                                                                </span>
+                                                                                <div className="flex space-x-2">
+                                                                                    <a
+                                                                                        href={app.resumeURL}
+                                                                                        target="_blank"
+                                                                                        rel="noopener noreferrer"
+                                                                                        className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                                                                                        title="Download Resume"
+                                                                                    >
+                                                                                        <Download className="h-4 w-4" />
+                                                                                    </a>
+                                                                                </div>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="flex flex-col items-end space-y-2">
-                                                                            <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${getStatusColor(app.status)}`}>
-                                                                                {app.status}
-                                                                            </span>
-                                                                            <div className="flex space-x-2">
-                                                                                <a
-                                                                                    href={app.resumeURL}
-                                                                                    target="_blank"
-                                                                                    rel="noopener noreferrer"
-                                                                                    className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                                                                                    title="Download Resume"
-                                                                                >
-                                                                                    <Download className="h-4 w-4" />
-                                                                                </a>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
 
-                                                                    {/* Status Actions */}
-                                                                    <div className="mt-4 pt-4 border-t flex space-x-2">
-                                                                        {app.status === 'applied' && (
-                                                                            <>
-                                                                                <button
-                                                                                    onClick={() => updateApplicationStatus(app._id, 'reviewed')}
-                                                                                    className="px-3 py-1.5 bg-yellow-100 text-yellow-700 rounded-lg text-sm font-medium hover:bg-yellow-200 transition-colors"
-                                                                                >
-                                                                                    Mark Reviewed
-                                                                                </button>
+                                                                        {/* Status Actions */}
+                                                                        <div className="mt-4 pt-4 border-t flex space-x-2">
+                                                                            {app.status === 'applied' && (
+                                                                                <>
+                                                                                    <button
+                                                                                        onClick={() => updateApplicationStatus(app._id, 'reviewed')}
+                                                                                        className="px-3 py-1.5 bg-yellow-100 text-yellow-700 rounded-lg text-sm font-medium hover:bg-yellow-200 transition-colors"
+                                                                                    >
+                                                                                        Mark Reviewed
+                                                                                    </button>
+                                                                                    <button
+                                                                                        onClick={() => updateApplicationStatus(app._id, 'shortlisted')}
+                                                                                        className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors"
+                                                                                    >
+                                                                                        Shortlist
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
+                                                                            {app.status === 'reviewed' && (
                                                                                 <button
                                                                                     onClick={() => updateApplicationStatus(app._id, 'shortlisted')}
                                                                                     className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors"
                                                                                 >
                                                                                     Shortlist
                                                                                 </button>
-                                                                            </>
-                                                                        )}
-                                                                        {app.status === 'reviewed' && (
-                                                                            <button
-                                                                                onClick={() => updateApplicationStatus(app._id, 'shortlisted')}
-                                                                                className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors"
-                                                                            >
-                                                                                Shortlist
-                                                                            </button>
-                                                                        )}
-                                                                        {(app.status === 'applied' || app.status === 'reviewed' || app.status === 'shortlisted') && (
-                                                                            <>
-                                                                                <button
-                                                                                    onClick={() => updateApplicationStatus(app._id, 'accepted')}
-                                                                                    className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
-                                                                                >
-                                                                                    Accept
-                                                                                </button>
-                                                                                <button
-                                                                                    onClick={() => updateApplicationStatus(app._id, 'rejected')}
-                                                                                    className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors"
-                                                                                >
-                                                                                    Reject
-                                                                                </button>
-                                                                            </>
-                                                                        )}
+                                                                            )}
+                                                                            {(app.status === 'applied' || app.status === 'reviewed' || app.status === 'shortlisted') && (
+                                                                                <>
+                                                                                    <button
+                                                                                        onClick={() => updateApplicationStatus(app._id, 'accepted')}
+                                                                                        className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
+                                                                                    >
+                                                                                        Accept
+                                                                                    </button>
+                                                                                    <button
+                                                                                        onClick={() => updateApplicationStatus(app._id, 'rejected')}
+                                                                                        className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors"
+                                                                                    >
+                                                                                        Reject
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
-                                                                </div>
-                                                            ))}
+                                                                ))}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </motion.div>
@@ -310,22 +324,24 @@ const EmployerDashboard = () => {
                 </div>
             </div>
 
+            {/* Modals - Only render when needed */}
             {showPostModal && (
                 <PostJobModal
                     onClose={() => setShowPostModal(false)}
                     onSuccess={() => {
+                        success('Job posted successfully!');
                         fetchData();
                         setShowPostModal(false);
                     }}
                 />
             )}
-
             {editingJob && (
                 <PostJobModal
                     job={editingJob}
                     onClose={() => setEditingJob(null)}
                     onSuccess={() => {
-                        fetchData(); 
+                        success('Job updated successfully!');
+                        fetchData();
                         setEditingJob(null);
                     }}
                 />

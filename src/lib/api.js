@@ -1,6 +1,5 @@
 import axios from 'axios';
 
-// Fix: Remove space at end of URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://job-board-platform-3s4b.onrender.com/api';
 
 const api = axios.create({
@@ -68,6 +67,7 @@ export const applicationsApi = {
     apply: (data) => api.post('/applications', data),
     getMyApplications: () => api.get('/applications/my'),
     updateStatus: (id, status) => api.put(`/applications/${id}/status`, { status }),
+    getMyApplication: (id) => api.get(`/applications/my/${id}`),
 };
 
 // Employer API - For employers to view applications
@@ -81,4 +81,13 @@ export const employerApi = {
 export const notificationsApi = {
     getMyNotifications: () => api.get('/notifications'),
     markAsRead: (id) => api.patch(`/notifications/${id}/read`),
+};
+
+// Admin API 
+export const adminApi = {
+    getUsers: () => api.get('/admin/users'),
+    getReports: () => api.get('/admin/reports'),
+    deleteUser: (id, type) => api.delete(`/admin/users/${id}?type=${type}`),
+    deleteJob: (id) => api.delete(`/admin/jobs/${id}`),
+    getAllJobs: () => api.get('/admin/jobs'),
 };

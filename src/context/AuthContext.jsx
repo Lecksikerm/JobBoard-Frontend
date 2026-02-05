@@ -11,30 +11,32 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         checkAuth();
-
-        // Cleanup socket on unmount
-        return () => {
-            disconnectSocket();
-        };
+        return () => disconnectSocket();
     }, []);
 
     const checkAuth = async () => {
         const token = localStorage.getItem('token');
+        const savedUser = localStorage.getItem('user');
+
         if (token) {
             try {
-                // Decode JWT to get user info (temporary solution until you add /auth/me endpoint)
                 const payload = JSON.parse(atob(token.split('.')[1]));
                 const userData = {
                     id: payload.id,
                     role: payload.role,
+                    isAdmin: payload.isAdmin || false, 
                 };
 
-                setUser(userData);
+                // Merge with saved user data if exists
+                if (savedUser) {
+                    const parsed = JSON.parse(savedUser);
+                    setUser({ ...parsed, ...userData });
+                } else {
+                    setUser(userData);
+                }
+
                 setIsAuthenticated(true);
-
-                // Initialize socket connection for real-time notifications
                 initializeSocket(payload.id);
-
             } catch (error) {
                 console.error('Auth check failed:', error);
                 logout();
@@ -58,17 +60,16 @@ export const AuthProvider = ({ children }) => {
             const userData = {
                 id: payload.id,
                 role: payload.role,
+                isAdmin: payload.isAdmin || false, 
                 email,
             };
 
             localStorage.setItem('user', JSON.stringify(userData));
             setUser(userData);
             setIsAuthenticated(true);
-
-            // Initialize socket connection for real-time notifications
             initializeSocket(payload.id);
 
-            return { success: true };
+            return { success: true, isAdmin: userData.isAdmin };
         } catch (error) {
             return {
                 success: false,
@@ -92,17 +93,16 @@ export const AuthProvider = ({ children }) => {
             const userData = {
                 id: payload.id,
                 role: payload.role,
+                isAdmin: payload.isAdmin || false, 
                 email: data.email,
             };
 
             localStorage.setItem('user', JSON.stringify(userData));
             setUser(userData);
             setIsAuthenticated(true);
-
-            // Initialize socket connection for real-time notifications
             initializeSocket(payload.id);
 
-            return { success: true };
+            return { success: true, isAdmin: userData.isAdmin };
         } catch (error) {
             return {
                 success: false,
@@ -112,9 +112,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = () => {
-        // Disconnect socket before clearing auth data
         disconnectSocket();
-
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setUser(null);
@@ -126,6 +124,7 @@ export const AuthProvider = ({ children }) => {
         <AuthContext.Provider value={{
             user,
             isAuthenticated,
+            isAdmin: user?.isAdmin || false, 
             login,
             register,
             logout,
@@ -138,8 +137,6 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
-    if (!context) {
-        throw new Error('useAuth must be used within AuthProvider');
-    }
+    if (!context) throw new Error('useAuth must be used within AuthProvider');
     return context;
 };

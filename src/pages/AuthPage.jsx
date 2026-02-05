@@ -3,12 +3,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Briefcase, User, Building2, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 const AuthPage = () => {
     const [isLogin, setIsLogin] = useState(true);
     const [activeTab, setActiveTab] = useState('candidate'); // 'candidate' or 'employer'
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const { success, error: showError } = useToast();
     const [error, setError] = useState('');
 
     const { login, register } = useAuth();
@@ -38,7 +40,6 @@ const AuthPage = () => {
         if (isLogin) {
             result = await login(formData.email, formData.password, activeTab);
         } else {
-            // Prepare data based on role
             const data = activeTab === 'employer' ? {
                 name: formData.name,
                 companyName: formData.companyName,
@@ -56,12 +57,14 @@ const AuthPage = () => {
         setLoading(false);
 
         if (result.success) {
-            navigate(activeTab === 'employer' ? '/employer/dashboard' : '/jobs');
+            success(`Welcome${isLogin ? ' back' : ''}! Logged in as ${activeTab}`);
+            navigate(activeTab === 'employer' ? '/employer/dashboard' : '/candidate/dashboard');
         } else {
+            showError(result.error || 'Authentication failed');
             setError(result.error);
         }
     };
-
+    
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 pt-20 pb-12 px-4">
             <div className="max-w-md mx-auto">
@@ -87,8 +90,8 @@ const AuthPage = () => {
                                 type="button"
                                 onClick={() => setActiveTab('candidate')}
                                 className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-md text-sm font-medium transition-all ${activeTab === 'candidate'
-                                        ? 'bg-white text-primary-600 shadow-sm'
-                                        : 'text-gray-600 hover:text-gray-900'
+                                    ? 'bg-white text-primary-600 shadow-sm'
+                                    : 'text-gray-600 hover:text-gray-900'
                                     }`}
                             >
                                 <User className="h-4 w-4" />
@@ -98,8 +101,8 @@ const AuthPage = () => {
                                 type="button"
                                 onClick={() => setActiveTab('employer')}
                                 className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-md text-sm font-medium transition-all ${activeTab === 'employer'
-                                        ? 'bg-white text-primary-600 shadow-sm'
-                                        : 'text-gray-600 hover:text-gray-900'
+                                    ? 'bg-white text-primary-600 shadow-sm'
+                                    : 'text-gray-600 hover:text-gray-900'
                                     }`}
                             >
                                 <Building2 className="h-4 w-4" />
